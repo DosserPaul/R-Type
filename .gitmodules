@@ -1,0 +1,36 @@
+[submodule "Library/KapEngine"]
+	path = Library/KapEngine
+	branch = main
+	url = git@github.com:benji-35/KapEngine.git
+[submodule "Packages/KapMirror"]
+	path = Packages/KapMirror
+	branch = main
+	url = git@github.com:Chaika9/KapMirror.git
+[submodule "Library/vcpkg"]
+	path = Library/vcpkg
+	branch = master
+	url = git@github.com:microsoft/vcpkg.git
+[submodule "Packages/SylphTransport"]
+	path = Packages/SylphTransport
+	branch = main
+	url = git@github.com:Chaika9/SylphTransport.git
+[submodule "Library/LuaEngine"]
+	path = Library/LuaEngine
+	branch = master
+	url = git@github.com:lubgr/lua-cmake.git
+[submodule "Library/KapProfiler"]
+	path = Library/KapProfiler
+	branch = main
+	url = git@github.com:aureliancnx/KapProfiler.git
+[submodule "Packages/KapUI"]
+	path = Packages/KapUI
+	branch = main
+	url = git@github.com:benji-35/KapUi.git
+[submodule "Packages/KapRaylib"]
+	path = Packages/KapRaylib
+	branch = main
+	url = git@github.com:benji-35/KapRaylib.git
+[submodule "Library/backward"]
+	path = Library/backward
+	branch = master
+	url = git@github.com:bombela/backward-cpp.git

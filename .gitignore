@@ -1,0 +1,24 @@
+*.o
+
+build/
+Build/
+
+# Visual Studio Code
+.vscode/
+
+# IntelliJ
+.idea/
+
+# OSX
+.DS_Store
+
+# Rtype
+**.keDat
+
+/cmake-build-debug
+
+# KapProfiler
+**.kprof
+
+# ImGui
+imgui.ini

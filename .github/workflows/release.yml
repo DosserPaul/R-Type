@@ -1,0 +1,193 @@
+name: 'VCS - Create Release'
+
+on:
+  push:
+    branches:
+      - 'v*'
+
+jobs:
+  create_release:
+    name: Create release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+
+    steps:
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          body: |
+            Release of RType: ${{ github.ref }}
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+          generateReleaseNotes: true
+  build:
+    name: ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.os }}
+    needs: create_release
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {
+            name: "Windows",
+            os: windows-latest,
+            build_type: "Release",
+            cc: "cl",
+            cxx: "cl",
+            environment_script: "C:/Program Files (x86)/Microsoft Visual Studio/2022/Enterprise/VC/Auxiliary/Build/vcvars64.bat",
+            generators: "Visual Studio 17 2022",
+            build_result: "win64"
+          }
+          - {
+            name: "Linux",
+            os: ubuntu-latest,
+            build_type: "Debug",
+            cc: "gcc",
+            cxx: "g++",
+            generators: "Ninja",
+            build_result: "Linux"
+          }
+          - {
+            name: "MacOS",
+            os: macos-latest,
+            build_type: "Release",
+            cc: "clang",
+            cxx: "clang++",
+            generators: "Ninja",
+            build_result: "Darwin"
+          }
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - name: Print env
+        run: |
+          echo github.event.action: ${{ github.event.action }}
+          echo github.event_name: ${{ github.event_name }}
+      - name: Install dependencies on windows
+        if: startsWith(matrix.config.os, 'windows')
+        run: |
+          choco install ninja cmake
+          ninja --version
+          cmake --version
+      - name: Install packager
+        if: startsWith(matrix.config.os, 'windows')
+        run: nuget install WiX
+      - name: Install dependencies on ubuntu
+        if: startsWith(matrix.config.name, 'Linux')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake libtbb-dev
+          sudo apt-get install -y xorg-dev libglu1-mesa-dev
+          sudo apt-get install -y libxrandr-dev
+          ninja --version
+          cmake --version
+          gcc --version
+      - name: Install dependencies on macos
+        if: startsWith(matrix.config.os, 'MacOS')
+        run: |
+          brew install cmake ninja
+          ninja --version
+          cmake --version
+      - name: Configure project
+        shell: bash
+        run: |
+          mkdir build
+          cmake \
+            -S . \
+            -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.config.build_type }} \
+            -DCMAKE_CXX_STANDARD=20 \
+            -DBoost_DEBUG=0 \
+            -G "${{ matrix.config.generators }}"
+      - name: Build
+        shell: bash
+        run: cmake --build build --config ${{ matrix.config.build_type }}
+      - name: Create installer
+        run: |
+          cd build/
+          ls -lahR
+          cpack
+        shell: bash
+      - name: Upload Release Asset (.rpm)
+        if: ${{ startsWith(matrix.config.name, 'Linux') }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
+          asset_path: ./build/RType-1.0.1-Linux.rpm
+          asset_name: RType-Installer-Linux.rpm
+          asset_content_type: application/zip
+      - name: Upload Release Asset (.deb)
+        if: ${{ startsWith(matrix.config.name, 'Linux') }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
+          asset_path: ./build/RType-1.0.1-Linux.deb
+          asset_name: RType-Installer-Linux.deb
+          asset_content_type: application/zip
+      - name: Upload Release Asset (.dmg)
+        if: ${{ startsWith(matrix.config.os, 'macos') }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
+          asset_path: ./build/RType-1.0.1-Darwin.dmg
+          asset_name: RType-Installer-MacOS.dmg
+          asset_content_type: application/zip
+      - name: Upload Release Asset (.msi)
+        if: startsWith(matrix.config.os, 'windows')
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
+          asset_path: ./build/RType-1.0.1-win64.msi
+          asset_name: RType-Installer-Windows.msi
+          asset_content_type: application/zip
+      - name: Upload Release Asset (tgz)
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
+          asset_path: ./build/RType-1.0.1-${{ matrix.config.build_result }}.tar.gz
+          asset_name: RType-Build-${{ matrix.config.name }}.tar.gz
+          asset_content_type: application/zip
+
+  push_docker:
+    name: Push Server to Docker Hub
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          push: true
+          tags: aureliancnx/rtype-server:latest
